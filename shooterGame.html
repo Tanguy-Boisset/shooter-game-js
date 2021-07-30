@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Game JS</title>
+    <style>
+    	* { padding: 0; margin: 0; }
+    	canvas { background: #eee; display: block; margin: 0 auto; }
+        button { display: block; margin: 0 auto; }
+        h2 { text-align: center; }
+    </style>
+</head>
+<body onload="startGame()">
+<br/><br/>
+<canvas id="myCanvas" width="500" height="500"></canvas>
+<button onclick="restartGame()">Lancer le jeu</button>
+<h2>Score : <span id="score">0</span></h2>
+
+<script>
+
+let canvas = document.getElementById("myCanvas");
+let ctx = canvas.getContext("2d");
+let ennemiesAlive = [];
+let projectilesAlive = [];
+let spawnEnnemiesInterval;
+let updateCanvasInterval;
+
+function resetGame(){
+    //Reset intervals
+    clearInterval(spawnEnnemiesInterval);
+    clearInterval(updateCanvasInterval);
+
+    //Reset canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    //Remove eventListener
+    canvas.removeEventListener("click", shootProjectile);
+
+    //Reset list of ennemies and projectiles
+    ennemiesAlive = [];
+    projectilesAlive = [];
+}
+
+function restartGame(){
+    resetGame();
+    document.getElementById("score").innerHTML = 0;
+    startGame();
+}
+
+function startGame(){ 
+    canvas.addEventListener("click", shootProjectile);
+
+    spawnEnnemiesInterval = setInterval(spawnEnnemies, 1000);
+    updateCanvasInterval = setInterval(updateCanvas, 10);
+
+}
+
+function drawPlayer(){
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height/2, 10, 0, 2*Math.PI);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.strokeStyle = "black";
+        ctx.stroke();
+        ctx.closePath();
+    }
+
+function spawnEnnemies(){
+    let ennemy = new Ennemy();
+    ennemy.init();
+    ennemy.spawn();
+    ennemiesAlive.push(ennemy);
+}
+
+function updateCanvas(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawPlayer();
+    ennemiesAlive.forEach(ennemy => {
+        ennemy.move()
+        ennemy.checkPlayer();
+    });
+    projectilesAlive.forEach(projectile => {
+        projectile.move();
+        projectile.checkEnnemy(ennemiesAlive);
+    });
+    clearDeadEntities();
+}
+
+function clearDeadEntities() {
+    ennemiesAlive.forEach(ennemy =>{
+        if (!ennemy.alive){
+            const index = ennemiesAlive.indexOf(ennemy);
+            if (index > -1) {
+                ennemiesAlive.splice(index, 1);
+            }
+        }
+    });
+    projectilesAlive.forEach(projectile =>{
+        if (!projectile.alive){
+            const index = projectilesAlive.indexOf(projectile);
+            if (index > -1) {
+                projectilesAlive.splice(index, 1);
+            }
+        }
+    });
+}
+
+function shootProjectile(){
+    let projectile = new Projectile();
+    projectile.spawn();
+    projectilesAlive.push(projectile);
+}
+
+function entierAleatoire(min, max){
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
+
+function Ennemy() {
+
+    this.x = 0;
+    this.y = 0;
+    this.spawnX = 0;
+    this.spawnY = 0;
+    this.radius = 0;
+    this.color = "red";
+    this.speed = 0;
+    this.alive = true;
+
+    this.init = function() {
+        spawnSide = entierAleatoire(0,3); // 0:haut,1:droite,2:bas,3:gauche
+        spawnCoord = entierAleatoire(0,canvas.width);
+        switch (spawnSide) {
+            case 0:
+                this.spawnX = spawnCoord;
+                this.spawnY = 0;
+                break;
+            
+            case 1:
+                this.spawnX = canvas.width;
+                this.spawnY = spawnCoord;
+                break;
+
+            case 2:
+                this.spawnX = spawnCoord;
+                this.spawnY = canvas.height;
+                break;
+
+            case 3:
+                this.spawnX = 0;
+                this.spawnY = spawnCoord;
+                break;
+        
+        }
+
+        this.radius = entierAleatoire(7,25);
+
+        let possibleColor = ["red", "blue", "green", "orange", "purple", "pink", "yellow"];
+        this.color = possibleColor[entierAleatoire(0,possibleColor.length-1)];
+
+        this.speed = Math.random()*0.01;
+    }
+
+    this.spawn = function(){
+        ctx.beginPath();
+        ctx.arc(this.spawnX, this.spawnY, this.radius, 0, 2*Math.PI);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+        this.x = this.spawnX;
+        this.y = this.spawnY;
+    }
+
+    this.move = function(){
+        playerPosX = canvas.width/2;
+        playerPosY = canvas.height/2;
+
+        let dX = (playerPosX - this.spawnX)*this.speed;
+        let dY = (playerPosY - this.spawnY)*this.speed;
+
+        this.x += dX;
+        this.y += dY;
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, 2*Math.PI)
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    this.checkPlayer = function(){
+        let playerPosX = canvas.width/2;
+        let playerPosY = canvas.height/2;
+        let playerRadius = 10;
+        let distance = ((this.x - playerPosX)**2+(this.y - playerPosY)**2)**0.5
+        if (distance < this.radius + playerRadius) {
+            resetGame();
+        }
+    }
+}
+
+function Projectile(){
+
+    this.x = 0;
+    this.y = 0;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.radius = 2;
+    this.alive = true;
+
+    this.spawn = function() {
+        ctx.beginPath();
+        ctx.arc(canvas.width/2, canvas.height/2, this.radius, 0, 2*Math.PI)
+        ctx.fillStyle = "black";
+        ctx.fill();
+        ctx.closePath();
+        this.x = canvas.width/2;
+        this.y = canvas.height/2;
+        this.mouseX = event.clientX - event.target.getBoundingClientRect().left;
+        this.mouseY = event.clientY - event.target.getBoundingClientRect().top;
+        console.log(this.mouseX);
+        console.log(this.mouseY);
+    }
+
+    this.move = function(){
+        playerPosX = canvas.width/2;
+        playerPosY = canvas.height/2;
+
+        let dX = (this.mouseX - playerPosX)*0.05;
+        let dY = (this.mouseY - playerPosY)*0.05;
+
+        this.x += dX;
+        this.y += dY;
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, 2*Math.PI)
+        ctx.fillStyle = "black";
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    this.checkEnnemy = function(ennemyList){
+        for (let ennemy of ennemyList){
+            let distance = ((this.x - ennemy.x)**2+(this.y - ennemy.y)**2)**0.5
+            if (distance < this.radius + ennemy.radius) {
+                this.alive = false;
+                ennemy.alive = false;
+                document.getElementById("score").innerHTML = parseInt(document.getElementById("score").innerHTML) + 1;
+                break;
+            }
+        }
+    }
+}
+
+var cumulativeOffset = function(element) {
+    var top = 0, left = 0;
+    do {
+        top += element.offsetTop  || 0;
+        left += element.offsetLeft || 0;
+        element = element.offsetParent;
+    } while(element);
+
+    return {
+        top: top,
+        left: left
+    };
+};
+
+</script>
+
+</body>
+</html>
